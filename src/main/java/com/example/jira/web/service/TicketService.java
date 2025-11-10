@@ -6,9 +6,12 @@ import com.example.jira.web.dto.TicketCreatedEvent;
 import com.example.jira.web.exceptions.TicketNotFoundException;
 import com.example.jira.web.exceptions.TicketValidationException;
 import com.example.jira.web.model.Ticket;
+import com.example.jira.web.model.TicketHistory;
 import com.example.jira.web.model.TicketStatus;
+import com.example.jira.web.repository.TicketHistoryRepository;
 import com.example.jira.web.repository.TicketRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 import java.util.List;
@@ -17,12 +20,22 @@ import java.util.List;
 public class TicketService {
 
     private final TicketRepository ticketRepository;
+    private final TicketHistoryRepository historyRepository;
     private final TicketEventPublisher eventPublisher;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TicketService.class);
 
-    public TicketService(TicketRepository ticketRepository, TicketEventPublisher eventPublisher) {
+    public TicketService(TicketRepository ticketRepository, 
+                        TicketHistoryRepository historyRepository,
+                        TicketEventPublisher eventPublisher) {
         this.ticketRepository = ticketRepository;
+        this.historyRepository = historyRepository;
         this.eventPublisher = eventPublisher;
+    }
+
+    private void addHistory(Ticket ticket, String fieldName, String oldValue, String newValue) {
+        TicketHistory history = new TicketHistory(ticket, fieldName, oldValue, newValue, "system");
+        historyRepository.save(history);
+        logger.debug("Historique ajouté pour le ticket {}: {} -> {}", ticket.getId(), oldValue, newValue);
     }
 
     private void validateTicket(Ticket ticket) {
@@ -88,6 +101,7 @@ public class TicketService {
                 });
     }
 
+    @Transactional
     public synchronized Ticket createTicket(Ticket ticket) {
         logger.debug("Début de la création d'un ticket : {}", ticket);
         
@@ -100,6 +114,12 @@ public class TicketService {
         // Initialisation des champs par défaut
         initializeTicketFields(ticket);
         Ticket savedTicket = ticketRepository.save(ticket);
+        
+        // Ajouter l'historique de création
+        addHistory(savedTicket, "status", null, savedTicket.getStatus().toString());
+        if (savedTicket.getPriority() != null) {
+            addHistory(savedTicket, "priority", null, savedTicket.getPriority());
+        }
         
         try {
             TicketCreatedEvent event = new TicketCreatedEvent();
@@ -116,10 +136,20 @@ public class TicketService {
         return savedTicket;
     }
 
+    @Transactional
     public Ticket assignTicket(Long id, String assignee) {
         Ticket ticket = getTicketById(id);
+        String oldAssignee = ticket.getAssignee();
         ticket.setAssignee(assignee);
         Ticket savedTicket = ticketRepository.save(ticket);
+
+        // Ajouter l'historique du changement d'assignation
+        addHistory(savedTicket, "assignee", oldAssignee, assignee);
+        
+        // Si le statut a changé (passage à ASSIGNED), on l'historise aussi
+        if (savedTicket.getStatus() == TicketStatus.ASSIGNED) {
+            addHistory(savedTicket, "status", TicketStatus.CREATED.toString(), TicketStatus.ASSIGNED.toString());
+        }
 
         TicketAssignedEvent event = new TicketAssignedEvent();
         event.setTicketId(savedTicket.getId());
@@ -131,10 +161,15 @@ public class TicketService {
         return savedTicket;
     }
 
+    @Transactional
     public Ticket updateTicketStatus(Long id, TicketStatus status) {
         Ticket ticket = getTicketById(id);
+        TicketStatus oldStatus = ticket.getStatus();
         ticket.setStatus(status);
         Ticket savedTicket = ticketRepository.save(ticket);
+
+        // Ajouter l'historique du changement de statut
+        addHistory(savedTicket, "status", oldStatus.toString(), status.toString());
 
         if (status == TicketStatus.CLOSED) {
             TicketClosedEvent event = new TicketClosedEvent();

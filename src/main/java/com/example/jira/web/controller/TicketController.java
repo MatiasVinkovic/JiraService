@@ -2,6 +2,8 @@ package com.example.jira.web.controller;
 
 import com.example.jira.web.model.Ticket;
 import com.example.jira.web.model.TicketStatus;
+import com.example.jira.web.model.TicketHistory;
+import com.example.jira.web.repository.TicketHistoryRepository;
 import com.example.jira.web.service.TicketService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +16,12 @@ import java.util.List;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final TicketHistoryRepository historyRepository;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TicketController.class);
 
-    public TicketController(TicketService ticketService) {
+    public TicketController(TicketService ticketService, TicketHistoryRepository historyRepository) {
         this.ticketService = ticketService;
+        this.historyRepository = historyRepository;
     }
 
     @GetMapping
@@ -60,5 +64,14 @@ public class TicketController {
     public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
         ticketService.deleteTicket(id);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<TicketHistory>> getTicketHistory(@PathVariable Long id) {
+        // Vérifier que le ticket existe
+        ticketService.getTicketById(id);
+        // Récupérer l'historique
+        List<TicketHistory> history = historyRepository.findByTicket_IdOrderByChangedAtDesc(id);
+        return ResponseEntity.ok(history);
     }
 }

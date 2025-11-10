@@ -51,6 +51,7 @@ Base : `/api/tickets`
 
 - GET `/api/tickets` : retourne la liste de tous les tickets.
 - GET `/api/tickets/{id}` : récupère un ticket par id.
+- GET `/api/tickets/{id}/history` : récupère l'historique complet des modifications d'un ticket (assignations, changements de statut, etc.).
 - POST `/api/tickets/create` : crée un ticket — corps JSON correspondant à l'entité `Ticket` (title, description, priority optionnel, assignee optionnel).
 - PUT `/api/tickets/{id}/assign?assignee=NAME` : assigne le ticket.
 - PUT `/api/tickets/{id}/status?status=STATUS` : met à jour le statut (valeurs autorisées : CREATED, ASSIGNED, IN_PROGRESS, BLOCKED, RESOLVED, CLOSED).
@@ -70,6 +71,9 @@ curl -X PUT "http://localhost:8080/api/tickets/1/assign?assignee=Alice"
 
 # Fermer
 curl -X PUT "http://localhost:8080/api/tickets/1/status?status=CLOSED"
+
+# Voir l'historique des modifications
+curl http://localhost:8080/api/tickets/1/history
 ```
 
 ## Gestion des erreurs
