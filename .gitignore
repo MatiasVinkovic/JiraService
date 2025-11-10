@@ -1,2 +1,4 @@
 target/*
 target/maven-status/*
+target/classes/com/example/jira/web/controller/TicketController.class
+target/classes/com/example/jira/web/service/TicketService.class
